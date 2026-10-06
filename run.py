@@ -4,19 +4,20 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import api_key
+from config import settings
 from comma.handlers import router
 
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-bot = Bot(token=api_key)
-dp = Dispatcher(storage=MemoryStorage())
+bot: Bot = Bot(token=settings.bot_token)
+dp: Dispatcher = Dispatcher(storage=MemoryStorage())
 dp.include_router(router)
 
 
-async def main():
-    print("Бот запущен")
+async def main() -> None:
+    logger.info('Бот запущен')
     await dp.start_polling(bot)
 
 
@@ -24,4 +25,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Бот остановлен")
+        logger.info('Бот остановлен')
+
+

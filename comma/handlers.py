@@ -9,7 +9,7 @@ from aiogram.types import Message, CallbackQuery, FSInputFile, ReplyKeyboardRemo
 import comma.keyboard as kb
 import comma.money as money
 from comma.states import OrderStates
-from config import ADMIN_ID
+from config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def find_photo(name: str) -> Path | None:
 # ── /start ──
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
+async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     photo_path = find_photo("start_photo.jpg")
 
@@ -45,9 +45,9 @@ async def cmd_start(message: Message, state: FSMContext):
 # ── Шаг 1: комплект ──
 
 @router.callback_query(OrderStates.choosing_kit, F.data.startswith("kit:"))
-async def choose_kit(callback: CallbackQuery, state: FSMContext):
+async def choose_kit(callback: CallbackQuery, state: FSMContext) -> None:
     kit = callback.data.split(":")[1]
-    await state.update_data(kit=kit, total=money.PRICES[kit])
+    await state.update_data(kit=kit, total=money.KITS[kit].price)
 
     text = kb.standart if kit == "standart" else kb.premium
 
@@ -63,7 +63,7 @@ async def choose_kit(callback: CallbackQuery, state: FSMContext):
 # ── Шаг 2: способ получения ──
 
 @router.callback_query(OrderStates.choosing_delivery, F.data.startswith("delivery:"))
-async def choose_delivery(callback: CallbackQuery, state: FSMContext):
+async def choose_delivery(callback: CallbackQuery, state: FSMContext) -> None:
     delivery = callback.data.split(":")[1] == "1"
     await state.update_data(delivery=delivery)
 
@@ -82,7 +82,7 @@ async def choose_delivery(callback: CallbackQuery, state: FSMContext):
 # ── Шаг 3: телефон кнопкой ──
 
 @router.message(OrderStates.waiting_phone, F.contact)
-async def get_phone_contact(message: Message, state: FSMContext):
+async def get_phone_contact(message: Message, state: FSMContext) -> None:
     await state.update_data(phone=message.contact.phone_number)
     await _show_confirm(message, state)
 
@@ -90,7 +90,7 @@ async def get_phone_contact(message: Message, state: FSMContext):
 # ── Шаг 3: телефон текстом ──
 
 @router.message(OrderStates.waiting_phone, F.text)
-async def get_phone_text(message: Message, state: FSMContext):
+async def get_phone_text(message: Message, state: FSMContext) -> None:
     phone = message.text.strip()
     cleaned = (
         phone.replace("+", "").replace("-", "").replace(" ", "")
@@ -105,10 +105,10 @@ async def get_phone_text(message: Message, state: FSMContext):
     await _show_confirm(message, state)
 
 
-async def _show_confirm(message: Message, state: FSMContext):
+async def _show_confirm(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     text = kb.confirm_text.format(
-        kit=money.NAMES[data["kit"]],
+        kit=money.KITS[data['kit']].name,
         delivery="доставка" if data["delivery"] else "самовывоз",
         phone=data["phone"],
         total=data["total"],
@@ -125,7 +125,7 @@ async def _show_confirm(message: Message, state: FSMContext):
 # ── Шаг 4: оплата ──
 
 @router.callback_query(OrderStates.waiting_payment, F.data == "pay")
-async def cmd_pay(callback: CallbackQuery, state: FSMContext):
+async def cmd_pay(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     text = kb.pay_text.format(total=data["total"])
     await callback.message.edit_text(text, reply_markup=kb.paid)
@@ -135,7 +135,7 @@ async def cmd_pay(callback: CallbackQuery, state: FSMContext):
 # ── Шаг 5: подтверждение ──
 
 @router.callback_query(OrderStates.waiting_payment, F.data == "paid")
-async def cmd_paid(callback: CallbackQuery, state: FSMContext, bot: Bot):
+async def cmd_paid(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     kit = data.get("kit", "?")
     delivery = data.get("delivery", False)
@@ -146,14 +146,15 @@ async def cmd_paid(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.info(f"Заказ от {user.id} ({user.username}): {kit}, {total} ₽, {phone}")
 
     await callback.message.edit_text(kb.paid_text)
-
+    kit_info = money.KITS.get(kit)
+    kit_name = kit_info.name if kit_info else kit
     try:
         await bot.send_message(
-            ADMIN_ID,
+            settings.ADMIN_ID,
             f"🔔 <b>Новый заказ</b>\n\n"
             f"👤 @{user.username or '—'} (id <code>{user.id}</code>)\n"
             f"📞 Телефон: <code>{phone}</code>\n"
-            f"📦 Комплект: {money.NAMES.get(kit, kit)}\n"
+            f"📦 Комплект: {kit_name}\n"
             f"🚚 Способ: {'доставка' if delivery else 'самовывоз'}\n"
             f"💰 Сумма: <b>{total} ₽</b>",
             parse_mode="HTML",
@@ -168,7 +169,7 @@ async def cmd_paid(callback: CallbackQuery, state: FSMContext, bot: Bot):
 # ── Отмена ──
 
 @router.callback_query(F.data == "cancel")
-async def cmd_cancel(callback: CallbackQuery, state: FSMContext):
+async def cmd_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     try:
         await callback.message.edit_text(kb.cancel_text)
@@ -180,5 +181,5 @@ async def cmd_cancel(callback: CallbackQuery, state: FSMContext):
 # ── фолбэк ──
 
 @router.message(F.text)
-async def unknown_command(message: Message):
+async def unknown_command(message: Message) -> None:
     await message.answer("Таких команд я не знаю\nНапиши /start и я покажу, что я могу")
