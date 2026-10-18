@@ -88,16 +88,11 @@ async def get_phone_contact(message: Message, state: FSMContext) -> None:
 
 
 # ── Шаг 3: телефон текстом ──
-
+from comma.utils import validate_phone
 @router.message(OrderStates.waiting_phone, F.text)
 async def get_phone_text(message: Message, state: FSMContext) -> None:
     phone = message.text.strip()
-    cleaned = (
-        phone.replace("+", "").replace("-", "").replace(" ", "")
-        .replace("(", "").replace(")", "")
-    )
-
-    if not cleaned.isdigit() or len(cleaned) < 10:
+    if not validate_phone(phone):
         await message.answer("Похоже, это не номер. Введи ещё раз или нажми кнопку 👇")
         return
 
